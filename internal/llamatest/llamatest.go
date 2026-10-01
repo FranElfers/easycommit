@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 const (
@@ -110,12 +111,38 @@ func Handler() http.Handler {
 			} `json:"response_format"`
 		}
 		json.NewDecoder(r.Body).Decode(&in)
-		reply(w, map[string]any{"choices": []any{map[string]any{
-			"finish_reason": "stop",
-			"message":       map[string]string{"content": Answer(in.ResponseFormat.JSONSchema.Schema)},
-		}}})
+		Stream(w, Answer(in.ResponseFormat.JSONSchema.Schema), "stop")
 	})
 	return mux
+}
+
+// PromptTokens is the prompt size that every streamed answer reports.
+const PromptTokens = 10
+
+// Stream writes a chat answer the way llama-server streams it: the progress
+// of reading the prompt in two events, the content in two more and the
+// finish reason last.
+func Stream(w http.ResponseWriter, content, finish string) {
+	event := func(delta map[string]any, finish any, extra map[string]any) {
+		chunk := map[string]any{"choices": []any{map[string]any{"delta": delta, "finish_reason": finish}}}
+		for k, v := range extra {
+			chunk[k] = v
+		}
+		fmt.Fprintf(w, "data: %s\n\n", marshal(chunk))
+		w.(http.Flusher).Flush()
+	}
+	for _, done := range []int{PromptTokens / 2, PromptTokens} {
+		progress := map[string]int{"total": PromptTokens, "processed": done}
+		event(map[string]any{"content": nil}, nil, map[string]any{"prompt_progress": progress})
+	}
+	half := len(content) / 2
+	for half > 0 && !utf8.RuneStart(content[half]) {
+		half--
+	}
+	event(map[string]any{"content": content[:half]}, nil, nil)
+	event(map[string]any{"content": content[half:]}, nil, nil)
+	event(map[string]any{}, finish, nil)
+	fmt.Fprint(w, "data: [DONE]\n\n")
 }
 
 // CountTokens is the fake tokenizer: one token per whitespace-separated word.

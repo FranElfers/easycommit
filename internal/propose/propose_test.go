@@ -31,6 +31,9 @@ func (m *fakeModel) CountTokens(_ context.Context, text string) (int, error) {
 
 func (m *fakeModel) Chat(_ context.Context, req llama.ChatRequest) (string, error) {
 	m.requests = append(m.requests, req)
+	if req.Progress != nil {
+		req.Progress(llama.Progress{PromptDone: 7, PromptTotal: 7, Generated: 3})
+	}
 	if n := len(m.requests); n <= len(m.answers) {
 		if m.answers[n-1] == truncated {
 			return "{", llama.ErrTruncated
@@ -145,6 +148,41 @@ func TestRollingSummary(t *testing.T) {
 	}
 	if final := m.requests[4].User; !strings.Contains(final, "### huge.go (modified)\nSummary: third summary") {
 		t.Errorf("final prompt lacks the rolling summary:\n%s", final)
+	}
+}
+
+// Every inference is announced as a step before it runs and followed while
+// it does.
+func TestStatus(t *testing.T) {
+	run := func(ctxSize int, changes ...gitdiff.Change) (seen []string) {
+		t.Helper()
+		status := func(s Status) {
+			seen = append(seen, fmt.Sprintf("%d/%d %s +%d", s.Step, s.Steps, s.Label, s.Generated))
+		}
+		_, err := Generate(context.Background(), &fakeModel{}, changes, Options{CtxSize: ctxSize, Body: "auto", Lang: "en", Status: status})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return seen
+	}
+	if got, want := run(8192, change("a.go", 10)), []string{
+		"1/1 proposing commits for 1 file +0",
+		"1/1 proposing commits for 1 file +3",
+	}; !reflect.DeepEqual(got, want) {
+		t.Errorf("single inference:\n%s", strings.Join(got, "\n"))
+	}
+
+	got := run(4096, change("huge.go", 6000), change("a.go", 1500), change("b.go", 1000), change("c.go", 1500))
+	want := []string{
+		"1/4 summarizing huge.go, part 1 of 3 +0", "1/4 summarizing huge.go, part 1 of 3 +3",
+		"1/4 summarizing huge.go, part 2 of 3 +0", "1/4 summarizing huge.go, part 2 of 3 +3",
+		"1/4 summarizing huge.go, part 3 of 3 +0", "1/4 summarizing huge.go, part 3 of 3 +3",
+		"2/4 summarizing 2 files +0", "2/4 summarizing 2 files +3",
+		"3/4 summarizing 1 file +0", "3/4 summarizing 1 file +3",
+		"4/4 proposing commits for 4 files +0", "4/4 proposing commits for 4 files +3",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("summaries first:\n%s", strings.Join(got, "\n"))
 	}
 }
 

@@ -62,25 +62,58 @@ type Proposal struct {
 
 // Options control how proposals are generated.
 type Options struct {
-	CtxSize  int
-	Body     string // auto, never or always
-	Lang     string
-	Progress func(format string, args ...any)
+	CtxSize int
+	Body    string // auto, never or always
+	Lang    string
+	// Note receives messages worth a line of their own. Optional.
+	Note func(format string, args ...any)
+	// Status follows the inference in progress. Optional.
+	Status func(Status)
+}
+
+// Status is the state of the work: which inference is running, out of how
+// many, and how far it is.
+type Status struct {
+	Step, Steps int
+	Label       string
+	llama.Progress
 }
 
 type generator struct {
 	Options
-	model Model
+	model       Model
+	step, steps int
+}
+
+// track announces the inference about to run as the current step and
+// returns the callback that follows its progress.
+func (g *generator) track(label string) func(llama.Progress) {
+	report := func(p llama.Progress) {
+		g.Status(Status{Step: g.step, Steps: g.steps, Label: label, Progress: p})
+	}
+	report(llama.Progress{})
+	return report
+}
+
+// files words a number of files.
+func files(n int) string {
+	if n == 1 {
+		return "1 file"
+	}
+	return fmt.Sprintf("%d files", n)
 }
 
 // Generate proposes commit messages for changes. When they fit in the context
 // window a single inference reads the diffs; otherwise the diffs are
 // summarized per file first and the final inference reads the summaries.
 func Generate(ctx context.Context, model Model, changes []gitdiff.Change, o Options) (Proposal, error) {
-	if o.Progress == nil {
-		o.Progress = func(string, ...any) {}
+	if o.Note == nil {
+		o.Note = func(string, ...any) {}
 	}
-	g := generator{Options: o, model: model}
+	if o.Status == nil {
+		o.Status = func(Status) {}
+	}
+	g := generator{Options: o, model: model, steps: 1}
 	language := fmt.Sprintf(languageRule, languageName(o.Lang))
 	system := fmt.Sprintf(proposalPrompt, bodyRules[o.Body], language)
 
@@ -104,7 +137,7 @@ func Generate(ctx context.Context, model Model, changes []gitdiff.Change, o Opti
 		return Proposal{}, err
 	}
 	if size > room {
-		g.Progress("changes need %d tokens but %d fit in the context: summarizing each file first", size, max(room, 0))
+		g.Note("changes need %d tokens but %d fit in the context: summarizing each file first", size, max(room, 0))
 		if sections, err = g.summarize(ctx, changes); err != nil {
 			return Proposal{}, err
 		}
@@ -116,10 +149,11 @@ func Generate(ctx context.Context, model Model, changes []gitdiff.Change, o Opti
 		}
 	}
 
-	g.Progress("writing proposals for %d files", len(changes))
+	g.step = g.steps
 	req := llama.ChatRequest{
 		System: system, User: strings.Join(sections, "\n") + language,
 		Schema: proposalSchema(paths, o.Body), MaxTokens: answer,
+		Progress: g.track("proposing commits for " + files(len(changes))),
 	}
 	return g.propose(ctx, req, paths)
 }
@@ -220,19 +254,20 @@ func (g *generator) summarize(ctx context.Context, changes []gitdiff.Change) ([]
 		costs[i] = size + summaryPerFile
 	}
 
+	// Every block is a step, and the proposal is the last one.
 	summaries := map[string]string{}
 	blocks := pack(costs, room)
+	g.steps = len(blocks) + 1
 	for i, block := range blocks {
-		files := textual[block[0] : block[0]+len(block)]
-		if costs[block[0]] > room {
-			g.Progress("block %d of %d: %s is larger than the context, summarizing it in parts", i+1, len(blocks), files[0].Path)
-			if summaries[files[0].Path], err = g.rolling(ctx, files[0], sizes[block[0]], room); err != nil {
+		g.step = i + 1
+		first := block[0]
+		if costs[first] > room {
+			if summaries[textual[first].Path], err = g.rolling(ctx, textual[first], sizes[first], room); err != nil {
 				return nil, err
 			}
 			continue
 		}
-		g.Progress("block %d of %d: summarizing %d files", i+1, len(blocks), len(files))
-		answer, err := g.summarizeBlock(ctx, files)
+		answer, err := g.summarizeBlock(ctx, textual[first:first+len(block)])
 		if err != nil {
 			return nil, err
 		}
@@ -249,17 +284,18 @@ func (g *generator) summarize(ctx context.Context, changes []gitdiff.Change) ([]
 }
 
 // summarizeBlock asks for the summary of every file of a block at once.
-func (g *generator) summarizeBlock(ctx context.Context, files []gitdiff.Change) (map[string]string, error) {
-	paths := make([]string, len(files))
-	sections := make([]string, len(files))
-	for i, c := range files {
+func (g *generator) summarizeBlock(ctx context.Context, block []gitdiff.Change) (map[string]string, error) {
+	paths := make([]string, len(block))
+	sections := make([]string, len(block))
+	for i, c := range block {
 		paths[i], sections[i] = c.Path, section(c, c.Diff)
 	}
 	req := llama.ChatRequest{
 		System:    summaryPrompt,
 		User:      strings.Join(sections, "\n"),
 		Schema:    perFile(paths, schema{"type": "string", "minLength": 1}),
-		MaxTokens: len(files) * summaryPerFile,
+		MaxTokens: len(block) * summaryPerFile,
+		Progress:  g.track("summarizing " + files(len(block))),
 	}
 	return ask(ctx, g, req, func(answer map[string]string) error {
 		for _, p := range paths {
@@ -282,6 +318,7 @@ func (g *generator) rolling(ctx context.Context, c gitdiff.Change, size, room in
 			System:    rollingPrompt,
 			User:      fmt.Sprintf(rollingUser, c.Path, c.Status, i+1, len(parts), summary, part),
 			MaxTokens: summaryTokens,
+			Progress:  g.track(fmt.Sprintf("summarizing %s, part %d of %d", c.Path, i+1, len(parts))),
 		}
 		text, err := g.model.Chat(ctx, req)
 		// A summary cut at the token limit is still a usable summary.
@@ -302,7 +339,7 @@ func ask[T any](ctx context.Context, g *generator, req llama.ChatRequest, check 
 	user := req.User
 	for range attempts {
 		if invalid != nil {
-			g.Progress("the model answer was rejected (%v), asking again", invalid)
+			g.Note("the model answer was rejected (%v), asking again", invalid)
 			req.User = fmt.Sprintf("%s\n\nYour previous answer was rejected: %v. Answer again without that mistake.", user, invalid)
 		}
 		text, err := g.model.Chat(ctx, req)

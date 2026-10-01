@@ -40,15 +40,26 @@ func TestClient(t *testing.T) {
 	if n, err := c.CountTokens(ctx, "three short words"); err != nil || n != 3 {
 		t.Errorf("CountTokens: %d, %v", n, err)
 	}
-	if text, err := c.Chat(ctx, llama.ChatRequest{System: "s", User: "u", MaxTokens: 10}); err != nil || text == "" {
+	// The answer arrives in pieces, with the progress reported along the way.
+	var seen []llama.Progress
+	req := llama.ChatRequest{System: "s", User: "u", MaxTokens: 10, Progress: func(p llama.Progress) { seen = append(seen, p) }}
+	text, err := c.Chat(ctx, req)
+	if err != nil || text != llamatest.Answer(nil) {
 		t.Errorf("Chat: %q, %v", text, err)
+	}
+	total := llamatest.PromptTokens
+	if len(seen) < 4 || seen[0] != (llama.Progress{PromptDone: total / 2, PromptTotal: total}) ||
+		seen[len(seen)-1] != (llama.Progress{PromptDone: total, PromptTotal: total, Generated: 2}) {
+		t.Errorf("progress: %+v", seen)
 	}
 }
 
 func TestChatRequest(t *testing.T) {
 	var got struct {
 		Messages       []struct{ Role, Content string }
-		MaxTokens      int `json:"max_tokens"`
+		MaxTokens      int  `json:"max_tokens"`
+		Stream         bool `json:"stream"`
+		ReturnProgress bool `json:"return_progress"`
 		ResponseFormat struct {
 			Type       string
 			JSONSchema struct{ Schema map[string]any } `json:"json_schema"`
@@ -57,9 +68,7 @@ func TestChatRequest(t *testing.T) {
 	finish := "stop"
 	c := serve(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&got)
-		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{
-			"finish_reason": finish, "message": map[string]string{"content": "partial"},
-		}}})
+		llamatest.Stream(w, "partial", finish)
 	}))
 
 	req := llama.ChatRequest{System: "sys", User: "usr", MaxTokens: 42, Schema: map[string]string{"type": "object"}}
@@ -69,7 +78,8 @@ func TestChatRequest(t *testing.T) {
 	if len(got.Messages) != 2 || got.Messages[0].Role != "system" || got.Messages[1].Content != "usr" {
 		t.Errorf("messages: %+v", got.Messages)
 	}
-	if got.MaxTokens != 42 || got.ResponseFormat.Type != "json_schema" || got.ResponseFormat.JSONSchema.Schema["type"] != "object" {
+	if got.MaxTokens != 42 || !got.Stream || !got.ReturnProgress ||
+		got.ResponseFormat.Type != "json_schema" || got.ResponseFormat.JSONSchema.Schema["type"] != "object" {
 		t.Errorf("request: %+v", got)
 	}
 
@@ -97,5 +107,17 @@ func TestErrors(t *testing.T) {
 	}
 	if err := llama.NewClient("/nonexistent/server.sock").Health(context.Background()); err == nil {
 		t.Error("missing socket: want an error")
+	}
+
+	// Failures after the answer started: an error event, and a stream that
+	// ends without a finish reason.
+	for name, events := range map[string]string{
+		"error event": "data: {\"choices\":[{\"delta\":{\"content\":\"par\"}}]}\n\ndata: {\"error\":{\"message\":\"slot failed\"}}\n\n",
+		"cut stream":  "data: {\"choices\":[{\"delta\":{\"content\":\"par\"}}]}\n\n",
+	} {
+		c := serve(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(events)) }))
+		if text, err := c.Chat(context.Background(), llama.ChatRequest{}); err == nil || errors.Is(err, llama.ErrTruncated) || text != "par" {
+			t.Errorf("%s: %q, %v", name, text, err)
+		}
 	}
 }

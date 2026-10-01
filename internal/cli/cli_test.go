@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
 
+	"github.com/franelfers/easycommit/internal/llama"
 	"github.com/franelfers/easycommit/internal/llamatest"
 	"github.com/franelfers/easycommit/internal/propose"
 )
@@ -236,6 +240,92 @@ Explain why.
 	// A title longer than the rule still gets a closing mark.
 	if got := header(strings.Repeat("x", 80)); got != "=== "+strings.Repeat("x", 80)+" ===\n" {
 		t.Errorf("long title: %q", got)
+	}
+}
+
+func TestUIOnTerminal(t *testing.T) {
+	var out bytes.Buffer
+	u := &ui{w: &out, tty: true, refresh: time.Millisecond}
+	// next returns what was written since the last call, with the control
+	// sequences made visible.
+	next := func() string {
+		s := strings.NewReplacer("\r", "<CR>", "\x1b[K", "<EL>").Replace(out.String())
+		out.Reset()
+		return s
+	}
+	step := propose.Status{Step: 2, Steps: 3, Label: "summarizing 5 files"}
+
+	u.status(step)
+	if got := next(); got != "<CR>step 2 of 3: summarizing 5 files<EL>" {
+		t.Errorf("step start: %q", got)
+	}
+	step.Progress = llama.Progress{PromptDone: 250, PromptTotal: 1000}
+	u.status(step)
+	if got := next(); got != "<CR>[#####---------------]  25% reading changes (step 2 of 3: summarizing 5 files)<EL>" {
+		t.Errorf("reading: %q", got)
+	}
+	step.Progress = llama.Progress{PromptDone: 1000, PromptTotal: 1000, Generated: 42}
+	u.status(step)
+	if got := next(); got != "<CR>writing answer, 42 tokens (step 2 of 3: summarizing 5 files)<EL>" {
+		t.Errorf("writing: %q", got)
+	}
+
+	// Updates within the same phase are drawn once per refresh interval.
+	u.refresh = time.Hour
+	step.Generated = 43
+	u.status(step)
+	if got := next(); got != "" {
+		t.Errorf("update before the interval elapsed: %q", got)
+	}
+	u.refresh = 0
+	u.status(step)
+	if got := next(); got != "<CR>writing answer, 43 tokens (step 2 of 3: summarizing 5 files)<EL>" {
+		t.Errorf("update after the interval elapsed: %q", got)
+	}
+	u.refresh = time.Millisecond
+
+	// Anything else erases the live line first; clearing twice does nothing.
+	u.note("something %s", "happened")
+	if got := next(); got != "<CR><EL>easycommit: something happened\n" {
+		t.Errorf("note: %q", got)
+	}
+	u.clear()
+	if got := next(); got != "" {
+		t.Errorf("clear without a live line: %q", got)
+	}
+
+	// A single step needs no numbering, and a long line is cut, not wrapped.
+	u.status(propose.Status{Step: 1, Steps: 1, Label: "summarizing " + strings.Repeat("x", 100)})
+	if got := next(); utf8.RuneCountInString(got) != len("<CR>")+liveWidth+len("<EL>") || !strings.HasSuffix(got, "x…<EL>") || strings.Contains(got, "step") {
+		t.Errorf("long line: %q", got)
+	}
+	u.clear()
+	next()
+
+	// wait shows the elapsed time while nothing else is printed, yields to
+	// other output, and leaves a clean line behind.
+	err := u.wait("loading model", func() error {
+		time.Sleep(20 * time.Millisecond)
+		return errors.New("failed")
+	})
+	if got := next(); err == nil || !strings.HasPrefix(got, "<CR>loading model… 0 s<EL>") || !strings.HasSuffix(got, "<CR><EL>") {
+		t.Errorf("wait: %v, %q", err, got)
+	}
+}
+
+func TestUIOffTerminal(t *testing.T) {
+	var out bytes.Buffer
+	u := newUI(&out)
+	step := propose.Status{Step: 1, Steps: 2, Label: "summarizing 5 files"}
+	u.status(step)
+	step.Progress = llama.Progress{PromptDone: 5, PromptTotal: 10}
+	u.status(step)
+	u.status(propose.Status{Step: 2, Steps: 2, Label: "proposing commits for 5 files"})
+	u.wait("loading model", func() error { return nil })
+	u.clear()
+	want := "easycommit: step 1 of 2: summarizing 5 files\neasycommit: step 2 of 2: proposing commits for 5 files\n"
+	if out.String() != want {
+		t.Errorf("got %q", out.String())
 	}
 }
 

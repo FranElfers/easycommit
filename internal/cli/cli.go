@@ -168,15 +168,14 @@ func parseArgs(o *options, args []string, stderr io.Writer) ([]string, error) {
 
 // generate is the main command: it prints proposals for the working tree.
 func generate(ctx context.Context, o options, stdout, stderr io.Writer) error {
-	progress := func(format string, args ...any) {
-		fmt.Fprintf(stderr, "easycommit: "+format+"\n", args...)
-	}
+	u := newUI(stderr)
+	defer u.clear()
 	changes, err := gitdiff.Collect(ctx, ".", o.Exclude)
 	if err != nil {
 		return err
 	}
 	if len(changes) == 0 {
-		progress("no changes in the working tree")
+		u.note("no changes in the working tree")
 		return nil
 	}
 
@@ -189,15 +188,15 @@ func generate(ctx context.Context, o options, stdout, stderr io.Writer) error {
 			return fmt.Errorf("detecting VRAM with %s --list-devices: %w", bin, err)
 		}
 		p := config.ProfileFor(o.VRAMMB)
-		progress("detected %d MiB of VRAM: using a context of %d tokens", o.VRAMMB, p.CtxSize)
+		u.note("detected %d MiB of VRAM: using a context of %d tokens", o.VRAMMB, p.CtxSize)
 		if err := config.SaveVRAM(o.configPath, o.VRAMMB); err != nil {
-			progress("warning: could not save vram_mb: %v", err)
+			u.note("warning: could not save vram_mb: %v", err)
 		} else {
-			progress("saved vram_mb to %s", o.configPath)
+			u.note("saved vram_mb to %s", o.configPath)
 		}
 	}
 	if !o.CPU && o.VRAMMB == 0 {
-		progress("warning: no usable GPU found, running inference on the CPU")
+		u.note("warning: no usable GPU found, running inference on the CPU")
 	}
 	o.Config = o.WithProfile()
 
@@ -205,17 +204,27 @@ func generate(ctx context.Context, o options, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	client, err := srv.Ensure(ctx, bin, o.Config, stderr)
+	var client *llama.Client
+	err = u.wait("loading model", func() error {
+		if client, err = srv.Ensure(ctx, bin, o.Config, u); err != nil {
+			return err
+		}
+		// A server that unloaded the model while idle loads it again on the
+		// first request that needs it: make that happen here.
+		_, err = client.CountTokens(ctx, "")
+		return err
+	})
 	if err != nil {
 		return err
 	}
 	var model propose.Model = client
 	if os.Getenv(debugEnv) != "" {
-		model = traced{model, stderr}
+		model = traced{model, u}
 	}
 	proposal, err := propose.Generate(ctx, model, changes, propose.Options{
-		CtxSize: o.CtxSize, Body: o.Body, Lang: o.Lang, Progress: progress,
+		CtxSize: o.CtxSize, Body: o.Body, Lang: o.Lang, Note: u.note, Status: u.status,
 	})
+	u.clear()
 	if err != nil {
 		return err
 	}

@@ -72,6 +72,8 @@ easycommit server stop        # stop it and free its memory
 
 Proposals go to stdout. Progress, warnings and errors go to stderr, so the output can be piped safely.
 
+On a terminal the progress is a single line that updates in place and disappears at the end: the seconds spent loading the model, a bar while the model reads the changes, and the number of tokens written while it answers. When stderr is redirected, each step is printed as a plain line instead.
+
 The first run starts `llama-server` in the background and later runs reuse it. After `idle_timeout` seconds without use the server unloads the model from memory; the process itself stays until `easycommit server stop` or a reboot.
 
 ## Configuration

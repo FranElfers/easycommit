@@ -66,6 +66,12 @@ The grammar cannot check that a name used in `files` exists in `groups`, so `pro
 
 Block summaries use the same per-path object, with a string per file.
 
+## Progress
+
+`llama.Client.Chat` streams the answer and asks the server for `return_progress`, so each event tells how many prompt tokens were read, out of a known total, and then carries one token of the answer. `propose` wraps that into a `Status` with the step it belongs to: every block is a step and the proposal is the last one.
+
+`cli.ui` owns stderr. On a terminal it keeps one live line, drawn from each `Status`: a bar while the prompt is read, and a token count while the answer is written, because its final length is unknown. `ui.wait` covers the time before the first inference, when the model is loading and the server reports nothing, with the seconds elapsed. Anything else printed, such as a warning or the download log of the server, erases the live line first. Off a terminal the live line does not exist and each step prints one line when it starts.
+
 ## Server lifecycle
 
 State lives in `$XDG_RUNTIME_DIR/easycommit/`, or `~/.cache/easycommit/run/` when that variable is unset:
