@@ -1,0 +1,21 @@
+# Maintainer: franelfers
+pkgname=easycommit-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Conventional Commits proposals for a Git working tree, generated locally with llama.cpp"
+arch=('x86_64')
+url="https://github.com/franelfers/easycommit"
+license=('MIT')
+depends=('git' 'llama-cpp' 'ggml-vulkan')
+provides=('easycommit')
+conflicts=('easycommit')
+source=("easycommit-$pkgver::$url/releases/download/v$pkgver/easycommit-linux-x86_64"
+        "LICENSE-$pkgver::https://raw.githubusercontent.com/franelfers/easycommit/v$pkgver/LICENSE")
+# Run `updpkgsums` after bumping pkgver, once the release exists.
+sha256sums=('SKIP'
+            'SKIP')
+
+package() {
+  install -Dm755 "easycommit-$pkgver" "$pkgdir/usr/bin/easycommit"
+  install -Dm644 "LICENSE-$pkgver" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
