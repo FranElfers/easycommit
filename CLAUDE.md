@@ -4,7 +4,7 @@ Go CLI that proposes Conventional Commits messages for a Git working tree, using
 
 Read before changing behaviour:
 
-- `SPECS.md`: what the program must do (product spec, in Spanish).
+- `README.md`: what the program does for its users.
 - `docs/architecture.md`: how the code does it.
 - `docs/development.md`: testing approach, VRAM profiles, releasing.
 
@@ -25,6 +25,6 @@ go test ./internal/propose/ -run TestRollingSummary   # a single test
 - Linux only, no CGO. The only dependency outside the standard library is `BurntSushi/toml`; ask before adding another.
 - Tests must not need a GPU, a model or the network. Use `internal/llamatest`. `TestRealServer` is the only exception and is opt-in.
 - Prompts and schemas live in `internal/propose/prompt.go`. The fake server cannot judge them: verify changes against the real model, as described in `docs/development.md`.
-- A new setting needs a field in `config.Config`, a flag in `cli.parseArgs`, a row in `SPECS.md` section 6.1 and a line in the README example.
-- Code and documentation are in English; `SPECS.md` stays in Spanish.
-- Each fact lives in one document: the spec says what, `architecture.md` how, `development.md` how to test and release, the README how to use. Link instead of repeating.
+- A new setting needs a field in `config.Config`, a flag in `cli.parseArgs` and a line in the README example.
+- Code and documentation are in English.
+- Each fact lives in one document: the README says how to use the program, `architecture.md` how it works, `development.md` how to test and release. Link instead of repeating.

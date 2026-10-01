@@ -112,7 +112,6 @@ On the first run easycommit detects the VRAM of the GPU and picks a context size
 
 ## Documentation
 
-- [SPECS.md](SPECS.md): the product specification (in Spanish).
 - [docs/architecture.md](docs/architecture.md): how the code works.
 - [docs/development.md](docs/development.md): testing, VRAM profiles and releases.
 

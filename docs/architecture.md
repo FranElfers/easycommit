@@ -1,6 +1,6 @@
 # Architecture
 
-easycommit is a short-lived command that talks to a long-lived `llama-server` it starts itself. [SPECS.md](../SPECS.md) says what the program must do; this document says how the code does it.
+easycommit is a short-lived command that talks to a long-lived `llama-server` it starts itself. The [README](../README.md) says what the program does; this document says how the code does it.
 
 ## Packages
 
@@ -97,19 +97,14 @@ State lives in `$XDG_RUNTIME_DIR/easycommit/`, or `~/.cache/easycommit/run/` whe
 
 `llama-server --list-devices` prints the devices its backend can use with their memory. `DetectVRAM` takes the largest total. No devices means 0, and the server is then started with `--device none`.
 
-## Open points of the specification
+## Design decisions
 
-Section 8 of SPECS.md lists questions that were open when the spec was written. This is how the code settles them.
+Choices that are not obvious from the code, and what they rest on.
 
-| Point | Decision |
+| Topic | Decision |
 | --- | --- |
 | VRAM profiles | Tiers in `config/profile.go`, derived from measurements on one 16 GB card. Provisional: see [development.md](development.md#vram-profiles). |
-| Unix socket support | Supported since llama.cpp PR #12613, which is older than the minimum version below. The TCP fallback of the spec is therefore not implemented. |
+| Unix socket support | Supported since llama.cpp PR #12613, which is older than the minimum version below. No TCP fallback is needed. |
 | Download cache | `llama-server` stores downloads in the Hugging Face cache, where easycommit looks. Verified with `--cache-list`. |
 | VRAM detection | `llama-server --list-devices`: it reports what the inference backend will actually see and adds no dependency. With several GPUs the largest one sets the profile. Integrated graphics count with the shared memory the backend reports. |
 | Minimum llama.cpp | b7492 (December 2025), the first build with `--sleep-idle-seconds`. Alpine 3.24 ships b9564 and Arch a later one. |
-
-Two details differ from the letter of the spec:
-
-- Alpine edge renamed the Vulkan backend package to `libggml-vulkan`. The spec's `llama.cpp-vulkan` is right for Alpine 3.24.
-- `--version` and the `EASYCOMMIT_DEBUG` variable exist although the spec does not list them.
