@@ -6,20 +6,22 @@ easycommit only prints proposals. It never commits, stages or changes anything i
 
 ```console
 $ easycommit
-All In One:
+=== All In One =============================================
+
 "feat(store): load key-value pairs from a file"
 
-Group "store loading":
-  cmd/main.go
-  internal/store/store.go
-"feat(store): load key-value pairs from a file"
+=== Divided in 2 commits ===================================
 
-Group "usage docs":
-  README.md
+"feat(store): load key-value pairs from a file"
+Read the file named by SAMPLE_DB at startup instead of using a fixed greeting.
+├─ cmd/main.go
+└─ internal/store/store.go
+
 "docs: explain the SAMPLE_DB variable"
+└─ README.md
 ```
 
-"All In One" is one message for everything. Each "Group" is a set of files the model suggests committing together, with its own message. Every changed file appears in exactly one group.
+"All In One" is one message for everything. "Divided" splits the changes into the commits the model suggests: each has its message, with the body under the subject when there is one, and the files to commit together. Every changed file appears in exactly one commit.
 
 ## Requirements
 

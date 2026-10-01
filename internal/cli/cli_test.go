@@ -70,13 +70,15 @@ func TestProposals(t *testing.T) {
 	e.write("b.go", "package a\n")
 
 	stdout, stderr, code := e.run()
-	want := `All In One:
+	want := `=== All In One =============================================
+
 "chore: update 2 files"
 
-Group "all changes":
-  a.go
-  b.go
+=== Divided in 1 commit ====================================
+
 "chore: update 2 files"
+├─ a.go
+└─ b.go
 `
 	if code != 0 || stdout != want {
 		t.Fatalf("exit %d\nstdout:\n%s\nstderr:\n%s", code, stdout, stderr)
@@ -109,7 +111,7 @@ Group "all changes":
 
 	// The file sets the defaults and flags override it.
 	e.write(e.config, "vram_mb = 16304\nbody = \"always\"\n")
-	if stdout, _, _ = e.run(); !strings.Contains(stdout, "\"chore: update 2 files\n\nBecause the tests say so.\"\n") {
+	if stdout, _, _ = e.run(); !strings.Contains(stdout, "\"chore: update 2 files\"\nBecause the tests say so.\n") {
 		t.Errorf("body from the config file is missing:\n%s", stdout)
 	}
 	if stdout, _, _ = e.run("--body", "never"); strings.Contains(stdout, "Because") {
@@ -141,7 +143,7 @@ func TestCPUFallback(t *testing.T) {
 	t.Setenv(llamatest.DevicesEnv, llamatest.NoGPU)
 
 	stdout, stderr, code := e.run()
-	if code != 0 || !strings.HasPrefix(stdout, "All In One:\n") {
+	if code != 0 || !strings.HasPrefix(stdout, "=== All In One ===") {
 		t.Fatalf("exit %d\n%s\n%s", code, stdout, stderr)
 	}
 	for _, want := range []string{"warning: no usable GPU found", "CPU only"} {
@@ -200,34 +202,40 @@ func TestUsage(t *testing.T) {
 }
 
 func TestText(t *testing.T) {
-	body := "Explain why.\nOn two lines."
+	body := "Explain why.\n- first item\n- second item"
 	p := propose.Proposal{
 		AllInOne: propose.Message{Subject: "feat: all", Body: &body},
 		Groups: []propose.Group{
-			{Name: "First", Files: []string{"a.go", "dir/b.go"}, Message: propose.Message{Subject: "feat(a): one"}},
+			{Name: "First", Files: []string{"a.go", "dir/b.go", "z.go"}, Message: propose.Message{Subject: "feat(a): one"}},
 			{Name: "Second", Files: []string{"c.go"}, Message: propose.Message{Subject: "fix: two", Body: &body}},
 		},
 	}
-	want := `All In One:
-"feat: all
+	want := `=== All In One =============================================
 
+"feat: all"
 Explain why.
-On two lines."
+- first item
+- second item
 
-Group "First":
-  a.go
-  dir/b.go
+=== Divided in 2 commits ===================================
+
 "feat(a): one"
+├─ a.go
+├─ dir/b.go
+└─ z.go
 
-Group "Second":
-  c.go
-"fix: two
-
+"fix: two"
 Explain why.
-On two lines."
+- first item
+- second item
+└─ c.go
 `
 	if got := text(p); got != want {
 		t.Errorf("got:\n%s", got)
+	}
+	// A title longer than the rule still gets a closing mark.
+	if got := header(strings.Repeat("x", 80)); got != "=== "+strings.Repeat("x", 80)+" ===\n" {
+		t.Errorf("long title: %q", got)
 	}
 }
 

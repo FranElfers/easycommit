@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/franelfers/easycommit/internal/config"
 	"github.com/franelfers/easycommit/internal/gitdiff"
@@ -240,22 +241,42 @@ func (t traced) Chat(ctx context.Context, req llama.ChatRequest) (string, error)
 	return text, err
 }
 
-// text renders a proposal in the default human-readable format.
+// text renders a proposal in the default human-readable format: the
+// all-in-one message, then every proposed commit with the tree of its files.
 func text(p propose.Proposal) string {
-	quoted := func(m propose.Message) string {
-		if m.Body == nil {
-			return fmt.Sprintf("\"%s\"\n", m.Subject)
-		}
-		return fmt.Sprintf("\"%s\n\n%s\"\n", m.Subject, *m.Body)
-	}
 	var b strings.Builder
-	b.WriteString("All In One:\n" + quoted(p.AllInOne))
-	for _, g := range p.Groups {
-		fmt.Fprintf(&b, "\nGroup \"%s\":\n", g.Name)
-		for _, f := range g.Files {
-			fmt.Fprintf(&b, "  %s\n", f)
+	message := func(m propose.Message) {
+		fmt.Fprintf(&b, "\n\"%s\"\n", m.Subject)
+		if m.Body != nil {
+			b.WriteString(*m.Body + "\n")
 		}
-		b.WriteString(quoted(g.Message))
+	}
+	b.WriteString(header("All In One"))
+	message(p.AllInOne)
+
+	noun := "commits"
+	if len(p.Groups) == 1 {
+		noun = "commit"
+	}
+	b.WriteString("\n" + header(fmt.Sprintf("Divided in %d %s", len(p.Groups), noun)))
+	for _, g := range p.Groups {
+		message(g.Message)
+		for i, f := range g.Files {
+			branch := "├─"
+			if i == len(g.Files)-1 {
+				branch = "└─"
+			}
+			fmt.Fprintf(&b, "%s %s\n", branch, f)
+		}
 	}
 	return b.String()
+}
+
+// headerWidth is the length of the rules that open each section.
+const headerWidth = 60
+
+// header returns a title line padded with rule marks up to headerWidth columns.
+func header(title string) string {
+	line := "=== " + title + " "
+	return line + strings.Repeat("=", max(3, headerWidth-utf8.RuneCountInString(line))) + "\n"
 }
