@@ -22,7 +22,7 @@ func TestLoad(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if c.Body != "auto" || c.CtxSize != Unset || c.VRAMMB != Unset || len(c.Exclude) == 0 {
+		if c.Body != "never" || c.CtxSize != Unset || c.VRAMMB != Unset || len(c.Exclude) == 0 {
 			t.Errorf("unexpected defaults: %+v", c)
 		}
 		if err := c.Validate(); err != nil {

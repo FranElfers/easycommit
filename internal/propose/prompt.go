@@ -19,6 +19,12 @@ const subjectPattern = `^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|
 
 var subjectRE = regexp.MustCompile(subjectPattern)
 
+// bodyPattern keeps a body to one paragraph: without line breaks or
+// asterisks the model cannot write Markdown lists, headings or emphasis,
+// which it does whatever the prompt says. The length cap is a backstop, like
+// the one of the subject.
+const bodyPattern = `^[^"\\\n*]{1,600}$`
+
 const proposalPrompt = `You write Git commit messages that follow Conventional Commits v1.0.0.
 
 The user sends the changes of a working tree, one section per file. A section holds the diff of the file, or a summary of it when the change is large. Files marked "content omitted" are binary or generated: judge them by their path.
@@ -54,8 +60,8 @@ func languageName(lang string) string {
 }
 
 var bodyRules = map[string]string{
-	"auto":   `Set "body" to null unless the reason for the change is not obvious from the subject, the change breaks compatibility or it spans several areas. Most messages need no body. When there is one, it explains why in a few lines of plain prose without Markdown.`,
-	"always": `The body explains what changed and why in a few lines of plain prose without Markdown.`,
+	"auto":   `Set "body" to null unless the reason for the change is not obvious from the subject, the change breaks compatibility or it spans several areas. Most messages need no body. When there is one, it explains why in one or two sentences of plain prose, without Markdown or line breaks.`,
+	"always": `The body explains what changed and why in one or two sentences of plain prose, without Markdown or line breaks.`,
 	"never":  `Messages have no body.`,
 }
 
@@ -116,9 +122,9 @@ func messageProps(body string) []prop {
 	props := []prop{{"subject", schema{"type": "string", "pattern": subjectPattern}}}
 	switch body {
 	case "auto":
-		props = append(props, prop{"body", schema{"type": []string{"string", "null"}}})
+		props = append(props, prop{"body", schema{"type": []string{"string", "null"}, "pattern": bodyPattern}})
 	case "always":
-		props = append(props, prop{"body", schema{"type": "string", "minLength": 1}})
+		props = append(props, prop{"body", schema{"type": "string", "pattern": bodyPattern}})
 	}
 	return props
 }

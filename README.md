@@ -13,7 +13,6 @@ $ easycommit
 === Divided in 2 commits ===================================
 
 "feat(store): load key-value pairs from a file"
-Read the file named by SAMPLE_DB at startup instead of using a fixed greeting.
 ├─ cmd/main.go
 └─ internal/store/store.go
 
@@ -21,7 +20,7 @@ Read the file named by SAMPLE_DB at startup instead of using a fixed greeting.
 └─ README.md
 ```
 
-"All In One" is one message for everything. "Divided" splits the changes into the commits the model suggests: each has its message, with the body under the subject when there is one, and the files to commit together. Every changed file appears in exactly one commit.
+"All In One" is one message for everything. "Divided" splits the changes into the commits the model suggests: each has its message and the files to commit together. Messages are subjects only unless `body` asks for more. Every changed file appears in exactly one commit.
 
 ## Requirements
 
@@ -61,7 +60,7 @@ Run `easycommit` anywhere inside a repository. It reads the whole working tree: 
 ```sh
 easycommit                    # text proposals
 easycommit --json             # the same as JSON, for scripts
-easycommit --body never       # subjects only (auto | never | always)
+easycommit --body always      # add a body under each subject (never | auto | always)
 easycommit --lang es          # messages in another language
 easycommit --cpu              # do not use the GPU
 easycommit server status      # is the background llama-server running?
@@ -83,7 +82,7 @@ Settings are read from `~/.config/easycommit/config.toml` (or the file given wit
 ```toml
 server_bin   = "llama-server"   # name in PATH, or a path
 model        = "mistralai/Ministral-3-8B-Instruct-2512-GGUF:Q4_K_M"  # or a path to a .gguf file
-body         = "auto"           # auto | never | always
+body         = "never"          # never | auto | always
 lang         = "en"             # ISO code or language name
 idle_timeout = 600              # seconds of inactivity before the model is unloaded
 cpu          = false            # true: never use the GPU

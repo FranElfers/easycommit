@@ -25,7 +25,7 @@ const (
 )
 
 // BodyModes are the accepted values of Config.Body.
-var BodyModes = []string{"auto", "never", "always"}
+var BodyModes = []string{"never", "auto", "always"}
 
 // Config mirrors the TOML file; command-line flags override its fields.
 type Config struct {
@@ -48,7 +48,7 @@ func Default() Config {
 		Model:       "mistralai/Ministral-3-8B-Instruct-2512-GGUF:Q4_K_M",
 		CtxSize:     Unset,
 		GPULayers:   Unset,
-		Body:        "auto",
+		Body:        "never",
 		Lang:        "en",
 		IdleTimeout: 600,
 		Exclude: []string{

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -321,6 +322,22 @@ func TestSubjectPattern(t *testing.T) {
 	} {
 		if got := subjectRE.MatchString(subject); got != want {
 			t.Errorf("%q: match %v, want %v", subject, got, want)
+		}
+	}
+}
+
+func TestBodyPattern(t *testing.T) {
+	re := regexp.MustCompile(bodyPattern)
+	for body, want := range map[string]bool{
+		"Fixes #12: `parse` now accepts empty input.": true,
+		"First line.\nSecond line.":                   false,
+		"A **bold** claim.":                           false,
+		"Say \"hi\".":                                 false,
+		"":                                            false,
+		strings.Repeat("x", 601):                      false,
+	} {
+		if re.MatchString(body) != want {
+			t.Errorf("%q: want match %v", body, want)
 		}
 	}
 }

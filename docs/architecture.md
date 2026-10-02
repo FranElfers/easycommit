@@ -60,7 +60,7 @@ Answers are constrained with a JSON schema, which `llama-server` turns into a gr
 3. `groups`: name, subject and body for each group.
 4. `all_in_one`: subject and body.
 
-Subjects must match the Conventional Commits pattern in `subjectPattern`, which is part of the schema. The body is nullable (`auto`), a non-empty string (`always`) or absent (`never`).
+Subjects must match the Conventional Commits pattern in `subjectPattern`, which is part of the schema. The body is nullable (`auto`), a non-empty string (`always`) or absent (`never`). A body must match `bodyPattern`: one paragraph without line breaks or asterisks, which rules out Markdown lists, headings and emphasis.
 
 The grammar cannot check that a name used in `files` exists in `groups`, so `propose` does. An answer that fails this check, fails the subject pattern or is cut by the token limit is asked again with the reason appended to the prompt, for at most three attempts. Groups left without files are dropped.
 
