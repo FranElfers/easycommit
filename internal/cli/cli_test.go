@@ -34,7 +34,6 @@ type env struct {
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	t.Setenv("XDG_RUNTIME_DIR", llamatest.ShortDir(t))
-	t.Setenv("HF_HUB_CACHE", t.TempDir())
 	t.Chdir(t.TempDir())
 	e := &env{t: t, config: filepath.Join(t.TempDir(), "config.toml")}
 	e.base = []string{"--config", e.config, "--server-bin", llamatest.Install(t)}
@@ -167,8 +166,7 @@ func TestServerCommands(t *testing.T) {
 	if _, stderr, code := e.run(); code != 0 {
 		t.Fatal(stderr)
 	}
-	// Flags are accepted after the command words too.
-	if stdout, _, code := e.exec(append([]string{"server", "status"}, e.base...)); code != 0 || !strings.HasPrefix(stdout, "running, model loaded (pid ") {
+	if stdout, _, code := e.run("server", "status"); code != 0 || !strings.HasPrefix(stdout, "running, model loaded (pid ") {
 		t.Errorf("status: exit %d, %q", code, stdout)
 	}
 	if stdout, _, code := e.run("server", "stop"); code != 0 || stdout != "stopped\n" {
@@ -236,10 +234,6 @@ Explain why.
 `
 	if got := text(p); got != want {
 		t.Errorf("got:\n%s", got)
-	}
-	// A title longer than the rule still gets a closing mark.
-	if got := header(strings.Repeat("x", 80)); got != "=== "+strings.Repeat("x", 80)+" ===\n" {
-		t.Errorf("long title: %q", got)
 	}
 }
 
@@ -336,9 +330,7 @@ func TestRealServer(t *testing.T) {
 	if bin == "" {
 		t.Skip("EASYCOMMIT_TEST_SERVER_BIN is not set")
 	}
-	hub := os.Getenv("HF_HUB_CACHE")
 	e := newEnv(t)
-	t.Setenv("HF_HUB_CACHE", hub)
 	e.base[3] = bin
 	e.write("main.go", "package main\n\nfunc main() { println(\"hello\") }\n")
 	e.write("README.md", "# Demo\n\nPrints a greeting.\n")

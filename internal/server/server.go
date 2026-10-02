@@ -85,16 +85,11 @@ func (s *Server) Ensure(ctx context.Context, bin string, cfg config.Config, stde
 	}
 	defer unlock()
 
-	// Any of these command lines is an acceptable running server; the first
-	// one is used to start a new instance.
-	var wanted [][]string
-	for _, model := range modelArgs(cfg.Model) {
-		wanted = append(wanted, s.args(cfg, model))
-	}
+	// The command line that starts the server also identifies a running one.
+	want := s.args(cfg, modelArgs(cfg.Model))
 
 	pid, running := s.process()
-	matches := func(want []string) bool { return hasSuffix(running, want) }
-	if pid != 0 && !slices.ContainsFunc(wanted, matches) {
+	if pid != 0 && !hasSuffix(running, want) {
 		fmt.Fprintln(stderr, "easycommit: settings changed, restarting llama-server")
 		s.terminate(pid)
 		pid = 0
@@ -103,10 +98,9 @@ func (s *Server) Ensure(ctx context.Context, bin string, cfg config.Config, stde
 	follow := false
 	if pid == 0 {
 		fmt.Fprintf(stderr, "easycommit: starting llama-server (context %d tokens, %s)\n", cfg.CtxSize, offload(cfg))
-		if follow = slices.Contains(wanted[0], repoFlag); follow {
-			fmt.Fprintln(stderr, "easycommit: model not found in the Hugging Face cache, llama-server will download it")
-		}
-		if pid, err = s.start(bin, wanted[0]); err != nil {
+		// A repository may have to be downloaded, which only the server log shows.
+		follow = slices.Contains(want, repoFlag)
+		if pid, err = s.start(bin, want); err != nil {
 			return nil, err
 		}
 	}
@@ -236,7 +230,7 @@ func (s *Server) start(bin string, args []string) (int, error) {
 }
 
 // waitReady blocks until the server answers health checks. With follow set
-// it relays the server log, which carries the model download progress.
+// it relays the server log, which carries the progress of a model download.
 func (s *Server) waitReady(ctx context.Context, client *llama.Client, pid int, follow bool, stderr io.Writer) error {
 	var shown int64
 	relay := func() {

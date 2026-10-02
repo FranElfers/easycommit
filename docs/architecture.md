@@ -10,7 +10,7 @@ easycommit is a short-lived command that talks to a long-lived `llama-server` it
 | `internal/cli` | Flags, subcommands, wiring of the other packages, text and JSON output. |
 | `internal/config` | Defaults, TOML file, validation, VRAM profiles. |
 | `internal/gitdiff` | Reads the changes of the working tree. |
-| `internal/server` | Lifecycle of the background `llama-server`, model lookup, VRAM detection. |
+| `internal/server` | Lifecycle of the background `llama-server`, model arguments, VRAM detection. |
 | `internal/llama` | HTTP client for `llama-server` over a Unix socket. |
 | `internal/propose` | Prompts, token budget and the inference flows that produce proposals. |
 | `internal/llamatest` | Fake `llama-server` used by the tests. |
@@ -91,7 +91,7 @@ State lives in `$XDG_RUNTIME_DIR/easycommit/`, or `~/.cache/easycommit/run/` whe
 
 ### Model
 
-`model` is a path to a `.gguf` file or a Hugging Face repository. For a repository, `cachedModel` looks for the file in the Hugging Face cache and passes it with `--model`, which needs no network. If it is missing, the repository is passed with `--hf-repo`, `llama-server` downloads it, and its log is relayed to stderr as progress.
+`model` is a path to a `.gguf` file, passed with `--model`, or a Hugging Face repository, passed with `--hf-repo`. `llama-server` finds a repository in its own cache, which needs no network, and downloads it when it is missing. easycommit cannot tell the two cases apart, so every start from a repository relays the server log to stderr: that is where the download progress appears.
 
 ### VRAM
 
@@ -105,6 +105,6 @@ Choices that are not obvious from the code, and what they rest on.
 | --- | --- |
 | VRAM profiles | Tiers in `config/profile.go`, derived from measurements on one 16 GB card. Provisional: see [development.md](development.md#vram-profiles). |
 | Unix socket support | Supported since llama.cpp PR #12613, which is older than the minimum version below. No TCP fallback is needed. |
-| Download cache | `llama-server` stores downloads in the Hugging Face cache, where easycommit looks. Verified with `--cache-list`. |
+| Download cache | `llama-server` stores downloads in the Hugging Face cache and finds them there itself, so easycommit always passes the repository. |
 | VRAM detection | `llama-server --list-devices`: it reports what the inference backend will actually see and adds no dependency. With several GPUs the largest one sets the profile. Integrated graphics count with the shared memory the backend reports. |
 | Minimum llama.cpp | b7492 (December 2025), the first build with `--sleep-idle-seconds`. Alpine 3.24 ships b9564 and Arch a later one. |

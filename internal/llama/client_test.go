@@ -97,8 +97,8 @@ func TestErrors(t *testing.T) {
 		w.WriteHeader(status)
 		w.Write([]byte(`{"error":{"message":"the request exceeds the available context size"}}`))
 	}))
-	if err := c.Health(context.Background()); !errors.Is(err, llama.ErrLoading) {
-		t.Errorf("503: want ErrLoading, got %v", err)
+	if err := c.Health(context.Background()); err == nil {
+		t.Error("503: want an error")
 	}
 	status = http.StatusBadRequest
 	_, err := c.Chat(context.Background(), llama.ChatRequest{})

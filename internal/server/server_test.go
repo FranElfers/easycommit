@@ -5,7 +5,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -20,12 +19,11 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// setup isolates the state directory and the model cache, and returns the
+// setup isolates the state directory and returns the
 // server, the fake llama-server binary and a configuration to start it with.
 func setup(t *testing.T) (*Server, string, config.Config) {
 	t.Helper()
 	t.Setenv("XDG_RUNTIME_DIR", llamatest.ShortDir(t))
-	t.Setenv("HF_HUB_CACHE", t.TempDir())
 	s, err := New()
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +53,7 @@ func TestLifecycle(t *testing.T) {
 	if state != Loaded || pid == 0 {
 		t.Fatalf("after start: %s, pid %d", state, pid)
 	}
-	// The model is not cached, so the server is told to download it and its
+	// The model is a repository, which the server may have to download: its
 	// output is relayed.
 	if !strings.Contains(stderr.String(), "fake download progress") {
 		t.Errorf("download progress was not relayed: %q", stderr.String())
@@ -162,32 +160,12 @@ func TestArgs(t *testing.T) {
 }
 
 func TestModelArgs(t *testing.T) {
-	hub := t.TempDir()
-	t.Setenv("HF_HUB_CACHE", hub)
 	t.Setenv("HOME", "/home/someone")
-	repo := []string{"--hf-repo", "org/Name-GGUF:Q4_K_M", "--no-mmproj"}
-
-	if got := modelArgs("~/models/m.gguf"); !reflect.DeepEqual(got, [][]string{{"--model", "/home/someone/models/m.gguf"}}) {
+	if got := modelArgs("~/models/m.gguf"); !slices.Equal(got, []string{"--model", "/home/someone/models/m.gguf"}) {
 		t.Errorf("local file: %v", got)
 	}
-	if got := modelArgs("org/Name-GGUF:Q4_K_M"); !reflect.DeepEqual(got, [][]string{repo}) {
-		t.Errorf("repository not in the cache: %v", got)
-	}
-
-	snapshot := filepath.Join(hub, "models--org--Name-GGUF", "snapshots", "abc123")
-	os.MkdirAll(snapshot, 0o755)
-	for _, name := range []string{"Name-BF16-mmproj.gguf", "Name-Q8_0.gguf", "Name-Q4_K_M.gguf"} {
-		os.WriteFile(filepath.Join(snapshot, name), nil, 0o644)
-	}
-	cached := []string{"--model", filepath.Join(snapshot, "Name-Q4_K_M.gguf")}
-	if got := modelArgs("org/Name-GGUF:q4_k_m"); !reflect.DeepEqual(got[0], cached) || len(got) != 2 {
-		t.Errorf("cached repository: %v", got)
-	}
-	if got := modelArgs("org/Name-GGUF"); !reflect.DeepEqual(got[0], cached) {
-		t.Errorf("default quantization: %v", got)
-	}
-	if got := modelArgs("org/Name-GGUF:Q5_K_M"); len(got) != 1 {
-		t.Errorf("quantization not in the cache: %v", got)
+	if got := modelArgs("org/Name-GGUF:Q4_K_M"); !slices.Equal(got, []string{"--hf-repo", "org/Name-GGUF:Q4_K_M", "--no-mmproj"}) {
+		t.Errorf("repository: %v", got)
 	}
 }
 

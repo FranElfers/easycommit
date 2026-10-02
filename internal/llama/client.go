@@ -14,12 +14,8 @@ import (
 	"strings"
 )
 
-var (
-	// ErrLoading means the server is up but still loading the model.
-	ErrLoading = errors.New("llama-server is loading the model")
-	// ErrTruncated means the answer did not fit in the requested token limit.
-	ErrTruncated = errors.New("model answer exceeded the response token limit")
-)
+// ErrTruncated means the answer did not fit in the requested token limit.
+var ErrTruncated = errors.New("model answer exceeded the response token limit")
 
 // temperature is low so that proposals stay close to the diff.
 const temperature = 0.2
@@ -205,9 +201,6 @@ func (c *Client) send(ctx context.Context, method, path string, in any) (*http.R
 		return resp, nil
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusServiceUnavailable {
-		return nil, ErrLoading
-	}
 	var fail struct {
 		Error apiError `json:"error"`
 	}

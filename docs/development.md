@@ -8,7 +8,7 @@ No test needs a GPU, a model or the network. They need `git` and Linux (`/proc`)
 
 - **Fake server.** `internal/llamatest` implements the `llama-server` command line and HTTP API with deterministic answers: one token per word, and a proposal that puts every file in a single group. `llamatest.Install` writes a `llama-server` script that re-runs the test binary as that fake, which is why packages using it call `llamatest.Main` from `TestMain`. The `server` and `cli` tests start it as a real background process, so they exercise the true lifecycle: detaching, PID file, socket, lock and restart.
 - **Scripted model.** `propose` tests use an in-process `fakeModel` that can return invalid or cut answers, to cover validation and retries.
-- **Isolation.** Tests point `XDG_RUNTIME_DIR`, `HF_HUB_CACHE` and `--config` at temporary directories. The runtime directory comes from `llamatest.ShortDir` because a Unix socket path is limited to 107 bytes, which `t.TempDir` can exceed.
+- **Isolation.** Tests point `XDG_RUNTIME_DIR` and `--config` at temporary directories. The runtime directory comes from `llamatest.ShortDir` because a Unix socket path is limited to 107 bytes, which `t.TempDir` can exceed.
 
 The fake server cannot judge the quality of a prompt. After changing a prompt or a schema, check it against the real model:
 

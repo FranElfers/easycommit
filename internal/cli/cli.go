@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/franelfers/easycommit/internal/config"
 	"github.com/franelfers/easycommit/internal/gitdiff"
@@ -25,8 +24,8 @@ var Version = "dev"
 
 const usage = `Usage:
   easycommit [flags]                 propose commit messages for the working tree
-  easycommit server status [flags]   show whether the llama-server is running
-  easycommit server stop [flags]     stop the llama-server
+  easycommit [flags] server status   show whether the llama-server is running
+  easycommit [flags] server stop     stop the llama-server
 
 Flags:
 `
@@ -104,7 +103,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 }
 
 // parse resolves the options with the precedence defaults < file < flags and
-// returns the command words. Flags may come before or after them.
+// returns the command words, which follow the flags.
 func parse(args []string, stderr io.Writer) (options, []string, error) {
 	path, err := config.DefaultPath()
 	if err != nil {
@@ -151,19 +150,12 @@ func parseArgs(o *options, args []string, stderr io.Writer) ([]string, error) {
 	fs.BoolVar(&o.json, "json", false, "print the proposals as JSON")
 	fs.BoolVar(&o.version, "version", false, "print the version")
 
-	// Flags can sit before, between and after the command words.
-	var command []string
-	for {
-		if err := fs.Parse(args); errors.Is(err, flag.ErrHelp) {
-			return nil, err
-		} else if err != nil {
-			return nil, errUsage
-		}
-		if fs.NArg() == 0 {
-			return command, nil
-		}
-		command, args = append(command, fs.Arg(0)), fs.Args()[1:]
+	if err := fs.Parse(args); errors.Is(err, flag.ErrHelp) {
+		return nil, err
+	} else if err != nil {
+		return nil, errUsage
 	}
+	return fs.Args(), nil
 }
 
 // generate is the main command: it prints proposals for the working tree.
@@ -284,8 +276,9 @@ func text(p propose.Proposal) string {
 // headerWidth is the length of the rules that open each section.
 const headerWidth = 60
 
-// header returns a title line padded with rule marks up to headerWidth columns.
+// header returns a title line padded with rule marks up to headerWidth
+// columns. Titles are ASCII and shorter than that.
 func header(title string) string {
 	line := "=== " + title + " "
-	return line + strings.Repeat("=", max(3, headerWidth-utf8.RuneCountInString(line))) + "\n"
+	return line + strings.Repeat("=", headerWidth-len(line)) + "\n"
 }
