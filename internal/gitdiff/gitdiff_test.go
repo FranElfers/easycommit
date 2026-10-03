@@ -189,3 +189,27 @@ func TestSplitDiff(t *testing.T) {
 		t.Errorf("empty diff: got %q", got)
 	}
 }
+
+func TestCollectRenames(t *testing.T) {
+	r := newRepo(t)
+	r.write("old.md", "same\n")
+	r.write("edited.md", "one\ntwo\nthree\nfour\n")
+	r.git("add", "-A")
+	r.git("commit", "-q", "-m", "init")
+	r.git("mv", "old.md", "dir-new.md")
+	r.git("mv", "edited.md", "edited2.md")
+	r.write("edited2.md", "one\ntwo\nthree\nfive\n")
+
+	got := r.collect(".")
+	c := got["dir-new.md"]
+	if c.Status != "renamed" || c.From != "old.md" || c.Omitted != Renamed || c.Diff != "" {
+		t.Errorf("exact rename: %+v", c)
+	}
+	// A rename with edits stays as delete + add so the edits are shown.
+	if got["edited.md"].Status != "deleted" || !strings.Contains(got["edited2.md"].Diff, "+five") || len(got) != 3 {
+		t.Errorf("rename with edits: %+v", got)
+	}
+	if len(r.collect(".", "old.md")) != 2 {
+		t.Error("excluding the old path should drop the rename")
+	}
+}

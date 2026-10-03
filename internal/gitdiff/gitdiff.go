@@ -20,18 +20,20 @@ var ErrNotRepo = errors.New("not inside a Git working tree")
 
 // Reasons why a Change carries no diff.
 const (
-	Binary = "binary"
+	Binary  = "binary"
+	Renamed = "renamed"
 )
 
 // Change is one file that differs from the last commit.
 type Change struct {
 	Path    string
-	Status  string // added, modified, deleted or type changed
+	Status  string // added, modified, deleted, renamed or type changed
 	Diff    string // unified diff; empty when Omitted is set
-	Omitted string // Binary: only path and status are reported
+	Omitted string // Binary or Renamed: only path and status are reported
+	From    string // previous path of a Renamed file, whose content did not change
 }
 
-var statusNames = map[byte]string{'A': "added", 'D': "deleted", 'T': "type changed"}
+var statusNames = map[byte]string{'A': "added", 'D': "deleted", 'T': "type changed", 'R': "renamed"}
 
 // Collect returns the changes of the working tree containing dir, compared
 // with HEAD. Files matching an exclude pattern are left out.
@@ -65,11 +67,12 @@ func Collect(ctx context.Context, dir string, exclude []string) ([]Change, error
 		base = strings.TrimSpace(base)
 	}
 
-	// Renames stay as delete + add so every path is listed and can be staged
-	// on its own; deleted content is dropped because the path says enough.
+	// Only exact renames are detected: they carry no content, so one entry
+	// says everything. A rename with edits stays as delete + add, so that the
+	// edits are shown. Deleted content is dropped because the path says enough.
 	// Fixed prefixes keep the output independent of the user's diff settings.
 	diffArgs := []string{"diff", "--no-color", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/",
-		"--no-renames", "--irreversible-delete"}
+		"-M100%", "--irreversible-delete"}
 	names, err := git(ctx, root, env, append(diffArgs, "--name-status", "-z", base, "--")...)
 	if err != nil {
 		return nil, err
@@ -84,26 +87,42 @@ func Collect(ctx context.Context, dir string, exclude []string) ([]Change, error
 	}
 	fields := strings.Split(strings.TrimSuffix(names, "\x00"), "\x00")
 	diffs := splitDiff(full)
-	if len(fields)%2 != 0 || len(diffs) != len(fields)/2 {
-		return nil, fmt.Errorf("unexpected git diff output: %d name fields, %d file diffs", len(fields), len(diffs))
-	}
 
+	// A name-status entry is a status and a path, or for a rename a status
+	// and two paths.
 	var changes []Change
-	for i, diff := range diffs {
-		c := Change{Path: fields[2*i+1], Status: "modified"}
-		if excluded(c.Path, exclude) {
-			continue
+	n := 0
+	for i := 0; i < len(fields); n++ {
+		step := 2
+		if fields[i][0] == 'R' {
+			step = 3
 		}
-		if name, ok := statusNames[fields[2*i][0]]; ok {
+		if i+step > len(fields) || n >= len(diffs) {
+			return nil, fmt.Errorf("unexpected git diff output: %d name fields, %d file diffs", len(fields), len(diffs))
+		}
+		c := Change{Path: fields[i+step-1], Status: "modified"}
+		if name, ok := statusNames[fields[i][0]]; ok {
 			c.Status = name
 		}
+		if step == 3 {
+			c.From, c.Omitted = fields[i+1], Renamed
+		}
+		diff := diffs[n]
+		i += step
+		if excluded(c.Path, exclude) || c.From != "" && excluded(c.From, exclude) {
+			continue
+		}
 		switch {
+		case c.Omitted != "":
 		case isBinary(diff):
 			c.Omitted = Binary
 		default:
 			c.Diff = diff
 		}
 		changes = append(changes, c)
+	}
+	if n != len(diffs) {
+		return nil, fmt.Errorf("unexpected git diff output: %d name entries, %d file diffs", n, len(diffs))
 	}
 	return changes, nil
 }

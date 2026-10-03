@@ -175,6 +175,10 @@ func generate(ctx context.Context, o options, stdout, stderr io.Writer) error {
 		return nil
 	}
 
+	if proposal, ok := propose.Renames(changes); ok {
+		return emit(proposal, o.json, stdout)
+	}
+
 	bin, err := server.FindBinary(o.ServerBin)
 	if err != nil {
 		return err
@@ -224,13 +228,18 @@ func generate(ctx context.Context, o options, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if o.json {
+	return emit(proposal, o.json, stdout)
+}
+
+// emit writes a proposal to stdout as JSON or as text.
+func emit(p propose.Proposal, asJSON bool, stdout io.Writer) error {
+	if asJSON {
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
 		enc.SetEscapeHTML(false)
-		return enc.Encode(proposal)
+		return enc.Encode(p)
 	}
-	_, err = io.WriteString(stdout, text(proposal))
+	_, err := io.WriteString(stdout, text(p))
 	return err
 }
 

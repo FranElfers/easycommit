@@ -155,7 +155,48 @@ func Generate(ctx context.Context, model Model, changes []gitdiff.Change, o Opti
 		Schema: proposalSchema(paths, o.Body), MaxTokens: answer,
 		Progress: g.track("proposing commits for " + files(len(changes))),
 	}
-	return g.propose(ctx, req, paths)
+	p, err := g.propose(ctx, req, paths)
+	addOldPaths(&p, changes)
+	return p, err
+}
+
+// addOldPaths lists the previous path of every renamed file before its new
+// one, because staging a rename takes both.
+func addOldPaths(p *Proposal, changes []gitdiff.Change) {
+	from := map[string]string{}
+	for _, c := range changes {
+		if c.From != "" {
+			from[c.Path] = c.From
+		}
+	}
+	for i, g := range p.Groups {
+		var files []string
+		for _, f := range g.Files {
+			if old, ok := from[f]; ok {
+				files = append(files, old)
+			}
+			files = append(files, f)
+		}
+		p.Groups[i].Files = files
+	}
+}
+
+// Renames proposes the commit for changes that are all exact renames, which
+// need no model: there is nothing to read but the paths.
+func Renames(changes []gitdiff.Change) (Proposal, bool) {
+	var files []string
+	for _, c := range changes {
+		if c.Omitted != gitdiff.Renamed {
+			return Proposal{}, false
+		}
+		files = append(files, c.From, c.Path)
+	}
+	subject := fmt.Sprintf("chore: rename %s to %s", changes[0].From, changes[0].Path)
+	if len(changes) > 1 {
+		subject = fmt.Sprintf("chore: rename %d files", len(changes))
+	}
+	m := Message{Subject: subject}
+	return Proposal{AllInOne: m, Groups: []Group{{Name: "rename", Files: files, Message: m}}}, len(changes) > 0
 }
 
 // room is how many tokens are left in the context next to the system

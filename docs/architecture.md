@@ -32,7 +32,7 @@ Dependencies point one way: `cli` uses everything, `server` uses `config` and `l
 
 - It copies the repository index to a temporary file and points `GIT_INDEX_FILE` at the copy. `git add --intent-to-add` on that copy makes untracked files visible to `git diff`, so a single diff against `HEAD` covers staged, unstaged and untracked changes. The real index and the object database are never written.
 - A repository without commits is compared with the empty tree.
-- Rename detection is off: a rename shows up as a deleted and an added file, so that every path is listed and can be staged by itself. The content of deleted files is left out because the path says enough.
+- Only exact renames are detected (`-M100%`): one `Change` with `Status` renamed and the previous path in `From`, and no content. A rename with edits stays a deleted and an added file, so that the edits are shown. A run where every change is an exact rename needs no model: `propose.Renames` writes the proposal and `cli` prints it before starting the server. Otherwise the model sees the rename as one file, and `propose` lists both paths in its group, since staging a rename takes both.
 - The full diff is cut into files at the `diff --git` lines and matched by position with the output of `--name-status -z`, which carries the raw paths.
 - Files matching an `exclude` pattern are dropped here, so nothing downstream sees them. Binary files keep only path and status (`Change.Omitted`).
 

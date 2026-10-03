@@ -365,3 +365,18 @@ func TestExcludeFlagAppends(t *testing.T) {
 		t.Errorf("Exclude = %v", o.Exclude)
 	}
 }
+
+func TestRenameNeedsNoModel(t *testing.T) {
+	e := newEnv(t)
+	e.write("old.md", "same\n")
+	e.git("add", ".")
+	e.git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init")
+	e.git("mv", "old.md", "new.md")
+	stdout, stderr, code := e.run()
+	if code != 0 || !strings.Contains(stdout, `"chore: rename old.md to new.md"`) || strings.Count(stdout, "new.md") != 3 {
+		t.Errorf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+	if stdout, _, _ := e.run("server", "status"); stdout != "not running\n" {
+		t.Errorf("a rename started the server: %q", stdout)
+	}
+}

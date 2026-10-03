@@ -84,6 +84,9 @@ Next part of the diff:
 
 // section renders one file for a prompt. Files without content keep a single line.
 func section(c gitdiff.Change, content string) string {
+	if c.Omitted == gitdiff.Renamed {
+		return fmt.Sprintf("### %s (renamed from %s, content unchanged)\n", c.Path, c.From)
+	}
 	if c.Omitted != "" {
 		return fmt.Sprintf("### %s (%s, %s: content omitted)\n", c.Path, c.Status, c.Omitted)
 	}
