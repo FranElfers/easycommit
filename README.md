@@ -44,6 +44,13 @@ Arch Linux, from the AUR:
 yay -S easycommit-bin
 ```
 
+Arch Linux, without the AUR, from the `PKGBUILD` in this repository:
+
+```sh
+git clone https://github.com/franelfers/easycommit && cd easycommit/packaging/aur
+makepkg -si
+```
+
 Any distribution, from the static binary attached to each [release](https://github.com/franelfers/easycommit/releases):
 
 ```sh
@@ -51,7 +58,7 @@ wget -O easycommit https://github.com/franelfers/easycommit/releases/latest/down
 install -Dm755 easycommit /usr/local/bin/easycommit
 ```
 
-From source, with Go installed: `make build`.
+From source, with Go installed: `make build`, or `go install github.com/franelfers/easycommit@latest`.
 
 ## Usage
 
