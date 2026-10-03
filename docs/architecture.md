@@ -34,7 +34,7 @@ Dependencies point one way: `cli` uses everything, `server` uses `config` and `l
 - A repository without commits is compared with the empty tree.
 - Rename detection is off: a rename shows up as a deleted and an added file, so that every path is listed and can be staged by itself. The content of deleted files is left out because the path says enough.
 - The full diff is cut into files at the `diff --git` lines and matched by position with the output of `--name-status -z`, which carries the raw paths.
-- Binary files and files matching an `exclude` pattern keep only path and status (`Change.Omitted`).
+- Files matching an `exclude` pattern are dropped here, so nothing downstream sees them. Binary files keep only path and status (`Change.Omitted`).
 
 ## Inference
 

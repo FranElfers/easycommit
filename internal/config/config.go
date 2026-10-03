@@ -54,6 +54,8 @@ func Default() Config {
 		Exclude: []string{
 			"package-lock.json", "yarn.lock", "pnpm-lock.yaml", "go.sum",
 			"Cargo.lock", "composer.lock", "poetry.lock", "uv.lock",
+			"bun.lock", "bun.lockb", "Gemfile.lock", "Pipfile.lock", "go.work.sum",
+			"pnpm-workspace.yaml",
 			"vendor/", "node_modules/", "dist/", "build/",
 			"*.min.js", "*.min.css", "*.map",
 		},

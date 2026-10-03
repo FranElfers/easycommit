@@ -93,15 +93,12 @@ func TestCollect(t *testing.T) {
 	got := r.collect("sub", "go.sum", "vendor/", "*.min.js")
 
 	want := map[string]struct{ status, omitted, contains string }{
-		"staged.go":         {"modified", "", "+func Staged() {}"},
-		"unstaged.go":       {"modified", "", "+func Unstaged() {}"},
-		"both.go":           {"modified", "", "+func Second() {}"},
-		"gone.go":           {"deleted", "", "deleted file mode"},
-		"new file.go":       {"added", "", "+func Untracked() {}"},
-		"image.png":         {"added", Binary, ""},
-		"vendor/lib/lib.go": {"added", Excluded, ""},
-		"web/app.min.js":    {"added", Excluded, ""},
-		"go.sum":            {"added", Excluded, ""},
+		"staged.go":   {"modified", "", "+func Staged() {}"},
+		"unstaged.go": {"modified", "", "+func Unstaged() {}"},
+		"both.go":     {"modified", "", "+func Second() {}"},
+		"gone.go":     {"deleted", "", "deleted file mode"},
+		"new file.go": {"added", "", "+func Untracked() {}"},
+		"image.png":   {"added", Binary, ""},
 	}
 	for path, w := range want {
 		c, ok := got[path]

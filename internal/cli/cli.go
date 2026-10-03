@@ -132,7 +132,7 @@ func parseArgs(o *options, args []string, stderr io.Writer) ([]string, error) {
 		fmt.Fprint(stderr, usage)
 		fs.VisitAll(func(f *flag.Flag) {
 			arg, text := flag.UnquoteUsage(f)
-			if f.DefValue != "false" {
+			if f.DefValue != "false" && f.DefValue != "" {
 				text += fmt.Sprintf(" (default %s)", f.DefValue)
 			}
 			fmt.Fprintf(stderr, "  %s\n        %s\n", strings.TrimSpace("--"+f.Name+" "+arg), text)
@@ -147,6 +147,10 @@ func parseArgs(o *options, args []string, stderr io.Writer) ([]string, error) {
 	fs.StringVar(&o.Body, "body", o.Body, "commit body `mode`: "+strings.Join(config.BodyModes, ", "))
 	fs.StringVar(&o.Lang, "lang", o.Lang, "`language` of the messages")
 	fs.IntVar(&o.IdleTimeout, "idle-timeout", o.IdleTimeout, "idle `seconds` before the model is unloaded")
+	fs.Func("exclude", "add a `pattern` of files to ignore (repeatable)", func(p string) error {
+		o.Exclude = append(o.Exclude, p)
+		return nil
+	})
 	fs.BoolVar(&o.json, "json", false, "print the proposals as JSON")
 	fs.BoolVar(&o.version, "version", false, "print the version")
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/franelfers/easycommit/internal/config"
 	"github.com/franelfers/easycommit/internal/llama"
 	"github.com/franelfers/easycommit/internal/llamatest"
 	"github.com/franelfers/easycommit/internal/propose"
@@ -350,5 +352,16 @@ func TestRealServer(t *testing.T) {
 	}
 	if files != 2 || p.AllInOne.Subject == "" {
 		t.Errorf("unexpected proposal: %+v", p)
+	}
+}
+
+func TestExcludeFlagAppends(t *testing.T) {
+	o := options{Config: config.Default()}
+	n := len(o.Exclude)
+	if _, err := parseArgs(&o, []string{"--exclude", "a.yml", "--exclude", "b/"}, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if len(o.Exclude) != n+2 || o.Exclude[n] != "a.yml" || o.Exclude[n+1] != "b/" {
+		t.Errorf("Exclude = %v", o.Exclude)
 	}
 }

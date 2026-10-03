@@ -20,8 +20,7 @@ var ErrNotRepo = errors.New("not inside a Git working tree")
 
 // Reasons why a Change carries no diff.
 const (
-	Binary   = "binary"
-	Excluded = "excluded"
+	Binary = "binary"
 )
 
 // Change is one file that differs from the last commit.
@@ -29,13 +28,13 @@ type Change struct {
 	Path    string
 	Status  string // added, modified, deleted or type changed
 	Diff    string // unified diff; empty when Omitted is set
-	Omitted string // Binary or Excluded: only path and status are reported
+	Omitted string // Binary: only path and status are reported
 }
 
 var statusNames = map[byte]string{'A': "added", 'D': "deleted", 'T': "type changed"}
 
 // Collect returns the changes of the working tree containing dir, compared
-// with HEAD. Files matching an exclude pattern keep only their path.
+// with HEAD. Files matching an exclude pattern are left out.
 func Collect(ctx context.Context, dir string, exclude []string) ([]Change, error) {
 	root, err := git(ctx, dir, nil, "rev-parse", "--show-toplevel")
 	if err != nil {
@@ -89,21 +88,22 @@ func Collect(ctx context.Context, dir string, exclude []string) ([]Change, error
 		return nil, fmt.Errorf("unexpected git diff output: %d name fields, %d file diffs", len(fields), len(diffs))
 	}
 
-	changes := make([]Change, len(diffs))
+	var changes []Change
 	for i, diff := range diffs {
 		c := Change{Path: fields[2*i+1], Status: "modified"}
+		if excluded(c.Path, exclude) {
+			continue
+		}
 		if name, ok := statusNames[fields[2*i][0]]; ok {
 			c.Status = name
 		}
 		switch {
-		case excluded(c.Path, exclude):
-			c.Omitted = Excluded
 		case isBinary(diff):
 			c.Omitted = Binary
 		default:
 			c.Diff = diff
 		}
-		changes[i] = c
+		changes = append(changes, c)
 	}
 	return changes, nil
 }

@@ -104,7 +104,7 @@ func TestSummarizeInBlocks(t *testing.T) {
 	// in a request: the three files need two blocks, and the lock file
 	// needs no summary.
 	m := &fakeModel{}
-	lock := gitdiff.Change{Path: "go.sum", Status: "modified", Omitted: gitdiff.Excluded}
+	lock := gitdiff.Change{Path: "go.sum", Status: "modified", Omitted: gitdiff.Binary}
 	p, err := generate(t, m, 4096, "auto", change("a.go", 1500), change("b.go", 1000), lock, change("c.go", 1500))
 	if err != nil {
 		t.Fatal(err)
@@ -116,7 +116,7 @@ func TestSummarizeInBlocks(t *testing.T) {
 		t.Errorf("first block should hold a.go and b.go only")
 	}
 	final := m.requests[2].User
-	for _, want := range []string{"### a.go (modified)\nSummary: summary of a.go", "### c.go (modified)\nSummary: summary of c.go", "### go.sum (modified, excluded: content omitted)"} {
+	for _, want := range []string{"### a.go (modified)\nSummary: summary of a.go", "### c.go (modified)\nSummary: summary of c.go", "### go.sum (modified, binary: content omitted)"} {
 		if !strings.Contains(final, want) {
 			t.Errorf("final prompt lacks %q:\n%s", want, final)
 		}

@@ -63,6 +63,7 @@ easycommit --json             # the same as JSON, for scripts
 easycommit --body always      # add a body under each subject (never | auto | always)
 easycommit --lang es          # messages in another language
 easycommit --cpu              # do not use the GPU
+easycommit --exclude pnpm-workspace.yaml   # ignore these files (repeatable)
 easycommit server status      # is the background llama-server running?
 easycommit server stop        # stop it and free its memory
 ```
@@ -94,10 +95,12 @@ cpu          = false            # true: never use the GPU
 # Written by easycommit on the first run. Delete the line to detect again.
 # vram_mb    = 16304
 
-# Files reported by path only, like binaries. Setting it replaces the default
-# list (lock files, vendor/, node_modules/, dist/, build/, minified files).
+# Files ignored as if they were not changed. Setting it replaces the default
+# list (lock files, pnpm-workspace.yaml, vendor/, node_modules/, dist/, build/, minified files).
 # exclude    = ["go.sum", "vendor/", "*.min.js"]
 ```
+
+`--exclude` adds patterns to that list instead of replacing it.
 
 In `exclude`, a pattern ending in `/` matches a directory at any depth, a pattern containing `/` is a glob over the whole path, and any other pattern is a glob over the file name.
 
