@@ -114,8 +114,8 @@ func Generate(ctx context.Context, model Model, changes []gitdiff.Change, o Opti
 		o.Status = func(Status) {}
 	}
 	g := generator{Options: o, model: model, steps: 1}
-	language := fmt.Sprintf(languageRule, languageName(o.Lang))
-	system := fmt.Sprintf(proposalPrompt, bodyRules[o.Body], language)
+	closing := fmt.Sprintf(closingRules, languageName(o.Lang))
+	system := fmt.Sprintf(proposalPrompt, bodyRules[o.Body], closing)
 
 	paths := make([]string, len(changes))
 	sections := make([]string, len(changes))
@@ -127,7 +127,7 @@ func Generate(ctx context.Context, model Model, changes []gitdiff.Change, o Opti
 		return Proposal{}, err
 	}
 	answer := answerBase + len(paths)*answerPerFile + pathTokens
-	room, err := g.room(ctx, system+language)
+	room, err := g.room(ctx, system+closing)
 	if err != nil {
 		return Proposal{}, err
 	}
@@ -151,7 +151,7 @@ func Generate(ctx context.Context, model Model, changes []gitdiff.Change, o Opti
 
 	g.step = g.steps
 	req := llama.ChatRequest{
-		System: system, User: strings.Join(sections, "\n") + language,
+		System: system, User: strings.Join(sections, "\n") + closing,
 		Schema: proposalSchema(paths, o.Body), MaxTokens: answer,
 		Progress: g.track("proposing commits for " + files(len(changes))),
 	}

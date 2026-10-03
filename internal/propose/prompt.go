@@ -28,19 +28,20 @@ const bodyPattern = `^[^"\\\n*]{1,600}$`
 const proposalPrompt = `You write Git commit messages that follow Conventional Commits v1.0.0.
 
 The user sends the changes of a working tree, one section per file. A section holds the diff of the file, or a summary of it when the change is large. Files marked "content omitted" are binary or generated: judge them by their path.
-
 Answer with:
 - "plan": the logical changes you find, each named like a section title: two to five plain words separated by spaces. These are the groups the changes will be committed in. Files that depend on each other, such as a function and its callers, code and its tests or a feature and its documentation, are one logical change. Use as few groups as the changes allow and keep unrelated changes apart.
 - "files": for every file, the name of its group, copied exactly from "plan".
 - "groups": for every name in "plan", the message of the commit that holds the files given that name. The message must account for all of those files.
 - "all_in_one": a single commit message that covers all the changes.
 
-Every message has a subject of the form "type(scope): description". The type is one of feat, fix, docs, style, refactor, perf, test, build, ci, chore or revert. The scope is optional. The description is imperative, starts in lower case, has no final period or double quotes and is short: the whole subject stays under 72 characters.
+Every message has a subject of the form "type(scope): description". The type is one of feat, fix, docs, style, refactor, perf, test, build, ci, chore or revert. The scope is optional. The description is imperative, starts in lower case, has no final period, double quotes or emoji and is short: aim for a subject of 50 characters and never exceed 72. Messages state the change directly, without "this commit", "I", "we", "now" or "currently", and do not repeat in the description what the scope already says.
 %s%s`
 
-// languageRule closes both the system prompt and the user message: small
-// models drift back to English unless the request ends with it.
-const languageRule = `
+// closingRules end both the system prompt and the user message: small models
+// drift back to English and to vague descriptions unless the request ends
+// with them.
+const closingRules = `
+Detail: every description says what its diff adds, removes or changes and names it (the function, setting, rule or value): "retry upload on timeout", not "improve upload handling". Use the verb of the change itself, such as add, remove, rename, replace, forbid, require or limit. "update", "improve", "clarify", "tighten" and "refine" hide the change: a description that would fit many other commits is wrong. When a commit holds several changes, name the one or two that matter most.
 Language: every group name, every description and every body must be written in %s, whatever the language of the changes. Only type and scope stay in English.`
 
 // languages names the common ISO 639 codes, which the model follows far
@@ -60,7 +61,7 @@ func languageName(lang string) string {
 }
 
 var bodyRules = map[string]string{
-	"auto":   `Set "body" to null unless the reason for the change is not obvious from the subject, the change breaks compatibility or it spans several areas. Most messages need no body. When there is one, it explains why in one or two sentences of plain prose, without Markdown or line breaks.`,
+	"auto":   `Set "body" to null unless the reason for the change is not obvious from the subject or the change breaks compatibility, fixes a security problem, migrates data, reverts a commit or spans several areas. Most messages need no body. When there is one, it explains why in one or two sentences of plain prose, without Markdown or line breaks.`,
 	"always": `The body explains what changed and why in one or two sentences of plain prose, without Markdown or line breaks.`,
 	"never":  `Messages have no body.`,
 }

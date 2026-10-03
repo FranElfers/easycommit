@@ -88,6 +88,8 @@ func (c *Client) Chat(ctx context.Context, req ChatRequest) (string, error) {
 		"max_tokens":      req.MaxTokens,
 		"stream":          true,
 		"return_progress": true,
+		// Thinking would spend the token limit before the answer starts.
+		"chat_template_kwargs": map[string]any{"enable_thinking": false},
 	}
 	if req.Schema != nil {
 		body["response_format"] = map[string]any{
