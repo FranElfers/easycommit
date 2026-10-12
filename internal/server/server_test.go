@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/franelfers/easycommit/internal/config"
 	"github.com/franelfers/easycommit/internal/llamatest"
@@ -120,6 +123,47 @@ func TestConcurrentEnsure(t *testing.T) {
 	if len(found) != 1 || found[0] != strconv.Itoa(pid) {
 		t.Errorf("want only server %d running, found %v", pid, found)
 	}
+}
+
+// The first liveness check follows the start immediately, while the process
+// is still executing its exec chain. It must not mistake that for a death.
+func TestAliveRightAfterStart(t *testing.T) {
+	bin := llamatest.Install(t)
+	dir := llamatest.ShortDir(t)
+	for i := range 20 {
+		cmd := exec.Command(bin, "--host", filepath.Join(dir, strconv.Itoa(i)+".sock"))
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		pid := cmd.Process.Pid
+		if !alive(pid) {
+			t.Errorf("process %d reported dead right after start", pid)
+		}
+		syscall.Kill(pid, syscall.SIGKILL)
+		cmd.Wait()
+		if alive(pid) {
+			t.Errorf("process %d reported alive after it was reaped", pid)
+		}
+	}
+}
+
+// A killed process stays a zombie until its parent waits for it. It is dead.
+func TestZombieIsDead(t *testing.T) {
+	bin := llamatest.Install(t)
+	cmd := exec.Command(bin, "--host", filepath.Join(llamatest.ShortDir(t), "zombie.sock"))
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	pid := cmd.Process.Pid
+	syscall.Kill(pid, syscall.SIGKILL)
+	deadline := time.Now().Add(5 * time.Second)
+	for alive(pid) && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if alive(pid) {
+		t.Errorf("zombie process %d reported alive", pid)
+	}
+	cmd.Wait()
 }
 
 func TestStartupFailure(t *testing.T) {

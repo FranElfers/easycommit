@@ -282,10 +282,15 @@ func (s *Server) terminate(pid int) {
 	os.Remove(s.socket())
 }
 
-// alive reports whether pid is a live process, not a zombie.
+// alive reports whether pid is a running process. It reads the state from
+// /proc/<pid>/stat, not /proc/<pid>/cmdline, which is empty while a process is
+// still executing. A zombie (exited, not yet reaped by its parent) counts as
+// dead, so terminate does not wait for a parent that never reaps it.
 func alive(pid int) bool {
-	raw, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
-	return err == nil && len(raw) > 0
+	stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	// The state follows the command name, which may hold spaces, so cut after it.
+	i := bytes.LastIndexByte(stat, ')')
+	return err == nil && i > 0 && i+2 < len(stat) && stat[i+2] != 'Z'
 }
 
 func hasSuffix(args, suffix []string) bool {
